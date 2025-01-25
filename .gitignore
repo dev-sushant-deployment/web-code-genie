@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/src/demoData.ts
 
 # debug
 npm-debug.log*

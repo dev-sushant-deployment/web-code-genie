@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Navbar } from "@/components/general/Navbar";
+import { Footer } from "@/components/general/Footer";
+
 
 export const metadata: Metadata = {
   title: "Web Code Genie",
@@ -12,9 +15,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>
-        {children}
+    <html lang="en" className="scroll-smooth">
+      <body className="bg-black text-white">
+        <div className="min-h-lvh flex flex-col items-center justify-between">
+          <Navbar />
+          {children}
+          <Footer/>
+        </div>
       </body>
     </html>
   );
