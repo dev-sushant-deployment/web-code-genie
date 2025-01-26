@@ -19,7 +19,7 @@ export const PromptInput = () => {
         className="flex-grow placeholder:font-semibold bg-gray-600 text-white placeholder:text-gray-100"
         ref={promptInputRef}
       />
-      <Link href="/workspace?prompt=${prompt}">
+      <Link href={`/workspace?prompt=${prompt}`}>
         <Button
           className="flex justify-between items-center gap-1 bg-white text-black hover:bg-gray-200"
           ref={generateButtonRef}
