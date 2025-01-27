@@ -4,3 +4,9 @@ export type FileSystem = {
   content?: string;
   children: FileSystem[];
 }
+
+export type File = {
+  name: string;
+  path: string;
+  content: string;
+}

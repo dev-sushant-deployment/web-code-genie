@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input"
 import { Button } from "../ui/button";
 import { Code, Download, Laptop, Loader, MessageCircle, Sparkles } from "lucide-react";
 import { demoChats, demoCodeFiles } from "@/demoData";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import type { FileSystem as FileSystemType } from '@/types/types';
+import type { File, FileSystem as FileSystemType } from '@/types/types';
 import { FileSystem } from "./FileSystem";
-import { Editor } from "@monaco-editor/react";
-import { getFileLanguage } from "@/helper/fileLanguage";
+import { Editor, Monaco } from "@monaco-editor/react";
+import { getFileLanguage } from "@/helper/Editor/fileLanguage";
 import { useSearchParams } from "next/navigation";
+import { setPrismaLanguage } from "@/helper/Editor/customLanguage";
 
 interface WorkspaceProps {
   initialChat?: {
@@ -41,32 +42,98 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
   const [chat, setChat] = useState<{ message: string; type: 'PROMPT' | 'RESPONSE'; }[]>(initialChat || []);
   const [codeFiles, setCodeFiles] = useState<{ name: string; path: string; content?: string; }[]>(initialCodeFiles || []);
   const [selectedFile, setSelectedFile] = useState<string>('');
-  const [fileSystem, setFileSystem] = useState<FileSystemType | undefined>();
+  const [generating, setGenerating] = useState<string>("");
+  const [fileSystem, setFileSystem] = useState<FileSystemType>();
 
-  const addFile = (file : FileSystemType) => {
-    const newFile = {
-      name: file.name,
-      path: file.path,
-      content: file.content,
-      children: []
-    };
-    setCodeFiles([...codeFiles, newFile]);
+  const updateFile = (file : File) => {
+    setFileSystem(prev => {
+      const path = file.path.split('/');
+      let currentDir = prev;
+
+      for (let i = 1; i < path.length; i++) {
+        let dir = currentDir?.children?.find((child) => child.name === path[i]);
+        if (!dir) {
+          dir = {
+            name: path[i],
+            path: `${currentDir?.path}${path[i]}/`,
+            children: []
+          };
+          currentDir?.children.push(dir);
+          currentDir?.children.sort((a, b) => {
+            if (a.children.length && !b.children.length) return -1;
+            if (!a.children.length && b.children.length) return 1;
+            return a.name.localeCompare(b.name);
+          });
+        }
+        currentDir = dir;
+      }
+
+      if (currentDir) {
+        currentDir.content = file.content;
+        setCodeFiles((prevFiles) => {
+          const existingFileIndex = prevFiles.findIndex((f) => f.path === file.path);
+          if (existingFileIndex !== -1) {
+            const updatedFiles = [...prevFiles];
+            updatedFiles[existingFileIndex] = file;
+            return updatedFiles;
+          }
+          return [...prevFiles, file];
+        });
+      }
+      return prev;
+    })
   }
 
-  const updateFile = (file : FileSystemType) => {
-    const index = codeFiles?.findIndex((f) => f.path === file.path);
-    if (index !== -1) {
-      if (codeFiles && index !== undefined && index !== -1) {
-        const newFiles = [...codeFiles];
-        newFiles[index] = {
-          name: file.name,
-          path: file.path,
-          content: file.content
-        };
-        setCodeFiles(newFiles);
+  const generate = async () => {
+    if (!prompt) return;
+    const url = chat.length == 1 ? `/api/generate?prompt=${prompt}` : `/api/modify?prompt=${prompt}&codeFiles=${JSON.stringify(codeFiles)}`;
+    const eventSource = new EventSource(url);
+    setPrompt("");
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log("data", data);
+      if (data.name && data.path) {
+        setGenerating(data.path);
+        const content = data.content || '';
+        updateFile({
+          name: data.name,
+          path: data.path,
+          content
+        });
+        setSelectedFile(data.path+'/');
+      } else if (data.response) {
+        setChat(prev => {
+          if (prev.slice(-1)[0]?.type === 'PROMPT') return [...prev, { message: data.response, type: 'RESPONSE' }];
+          prev[prev.length - 1].message = prev[prev.length - 1].message.length > data.response.length ? prev[prev.length - 1].message : data.response;
+          return prev;
+        })
+      } else if (data.done) {
+        eventSource.close();
+        setGenerating("");
       }
     }
   }
+
+  const handleEditorWillMount = (monaco: Monaco) => {
+    setPrismaLanguage(monaco);
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      jsx: monaco.languages.typescript.JsxEmit.React, // Enable React JSX
+      allowJs: true,
+      target: monaco.languages.typescript.ScriptTarget.ES2020,
+      module: monaco.languages.typescript.ModuleKind.ESNext,
+    });
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(`
+      declare namespace JSX {
+        interface IntrinsicElements {
+          [elemName: string]: any;
+        }
+      }
+    `, 'file:///node_modules/@types/react/index.d.ts');
+  };
+
+  useEffect(() => {
+    if (prompt) generate();
+  }, []);
 
   useEffect(() => {
     if (codeFiles) {
@@ -108,9 +175,9 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
         dir.children.forEach(sortFileSystem);
       };
       sortFileSystem(fs);
-      setFileSystem(fs);
+      if (fs) setFileSystem(fs);
     }
-  }, [codeFiles]);
+  }, []);
 
   useEffect(() => {
     console.log("fs", fileSystem);
@@ -146,7 +213,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
                 <Sparkles size={24}/>
               </div>
               <p className="w-4/5 p-2 text-white">
-                {`Generating code for: ${prompt}`}
+                {`Generating code...`}
               </p>
             </div>
           }
@@ -159,6 +226,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
             className="flex-grow placeholder:font-semibold bg-gray-600 text-white placeholder:text-gray-100 rounded-none rounded-es-lg h-full"
           />
           <Button
+            onClick={() => generate()}
             className="bg-white text-black hover:bg-gray-200 rounded-none rounded-ee-lg h-full"
           >
             <Sparkles/>
@@ -195,27 +263,37 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
           value="code"
           className={`w-full flex flex-grow rounded-b-xl m-0 ${selectedFile ? 'overflow-y-scroll' : ''}`}
         >
-          <div className="w-1/4 border-r-[1px] border-gray-700">
-            <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold">Files</p>
+          <div className="w-1/4 border-r-[1px] border-gray-700 overflow-y-scroll relative">
+            <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold sticky top-0 bg-black z-10">Files</p>
             {fileSystem &&
               <FileSystem
                 fileSystem={fileSystem}
                 selectedFile={selectedFile}
+                generating={generating}
                 setSelectedFile={setSelectedFile}
               />}
           </div>
-          <div className={`w-3/4 flex flex-col items-start justify-start ${selectedFile ? 'overflow-y-scroll' : ''}`}>
-            <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold">
+          <div className={`w-3/4 flex flex-col items-start justify-start relative ${selectedFile ? 'overflow-y-scroll' : ''}`}>
+            <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold sticky top-0">
               {selectedFile.split('/').slice(-2)[0] || 'Code'}
             </p>
             <div className="w-full flex-grow overflow-y-scroll bg-gray-900 flex items-center justify-center">
               {!selectedFile && <p className="text-white text-2xl font-semibold">Select a file to view code</p>}
               {selectedFile && <Editor
+                beforeMount={handleEditorWillMount}
                 value={codeFiles?.find((file) => file.path + '/' === selectedFile)?.content}
-                // onChange={(code) => handleFileContentChange(code)}
+                // onChange={(code) => code && handleEditorChange(code)}
                 loading={<Loader size={24} className="animate-spin" color="white"/>}
                 language={getFileLanguage(selectedFile)}
                 theme="vs-dark"
+                options={{
+                  wordWrap: "on",
+                  formatOnType: true,
+                  formatOnPaste: true,
+                  minimap: { enabled: true },
+                  automaticLayout: true,
+                  scrollBeyondLastLine: false
+                }}
                 className="text-white w-[650px] whitespace-pre-wrap focus:outline-none focus:border-none"
               />}
             </div>

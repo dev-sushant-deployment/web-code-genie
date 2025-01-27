@@ -10,6 +10,8 @@ export const getFileLanguage = (path : string) => {
       return "typescript";
     case "tsx":
       return "typescript";
+    case "prisma":
+      return "prisma";
     case "css":
       return "css";
     case "html":
