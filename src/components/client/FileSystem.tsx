@@ -3,7 +3,7 @@
 import type { FileSystem as FileSystemType } from '@/types/types';
 import { File, Folder, Loader } from 'lucide-react';
 import { Dispatch, SetStateAction, useEffect, useState } from 'react';
-import { ArrowAnimate } from './arrowAnimate';
+import { ArrowAnimate } from './ArrowAnimate';
 
 interface FileSystemProps {
   fileSystem: FileSystemType;

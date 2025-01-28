@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "../ui/input"
 import { Button } from "../ui/button";
 import { Code, Download, Laptop, Loader, MessageCircle, Sparkles } from "lucide-react";
-import { demoChats, demoCodeFiles } from "@/demoData";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import type { File, FileSystem as FileSystemType } from '@/types/types';
 import { FileSystem } from "./FileSystem";
 import { Editor, Monaco } from "@monaco-editor/react";
 import { getFileLanguage } from "@/helper/Editor/fileLanguage";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { setPrismaLanguage } from "@/helper/Editor/customLanguage";
+import { checkAuth } from "./Auth";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 interface WorkspaceProps {
   initialChat?: {
@@ -30,13 +32,18 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
   // initialCodeFiles = demoCodeFiles;
 
   const initialPrompt = useSearchParams().get('prompt');
+  const currentUrl = usePathname();
+  const isAuthRoute = currentUrl.includes('/auth');
 
-  if ((!initialChat || !initialCodeFiles) && !initialPrompt) throw new Error('Prompt is required to generate code');
+
+  if ((!initialChat || !initialCodeFiles) && !initialPrompt && !isAuthRoute) throw new Error('Prompt is required to generate code');
 
   if (!initialChat && initialPrompt) initialChat = [{
     message: initialPrompt,
     type: 'PROMPT'
   }];
+
+  const router = useRouter();
 
   const [prompt, setPrompt] = useState<string>(initialPrompt || '');
   const [chat, setChat] = useState<{ message: string; type: 'PROMPT' | 'RESPONSE'; }[]>(initialChat || []);
@@ -86,7 +93,20 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
 
   const generate = async () => {
     if (!prompt) return;
-    const url = chat.length == 1 ? `/api/generate?prompt=${prompt}` : `/api/modify?prompt=${prompt}&codeFiles=${JSON.stringify(codeFiles)}`;
+    let url = `/api/generate?prompt=${prompt}`;
+    if (chat.length > 1) {
+      const loggedin = checkAuth();
+      if (!loggedin) {
+        toast.info("Login to modify and save your code");
+        router.push('/auth?login=true&signup=false');
+        return;
+      }
+      if (currentUrl.includes('/code/')) {
+        let codeId = currentUrl.split('/').slice(-1)[0];
+        if (!codeId) codeId = currentUrl.split('/').slice(-2)[0];
+        url = `/api/modify/${codeId}?prompt=${prompt}`;
+      } else throw new Error('Invalid URL');
+    }
     const eventSource = new EventSource(url);
     setPrompt("");
     eventSource.onmessage = (event) => {

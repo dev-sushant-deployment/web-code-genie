@@ -12,3 +12,51 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  profile   String?
+  password  String
+  codes     Code[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Code {
+  id        String   @id @default(cuid())
+  title     String
+  chat      Chat[]
+  files     File[]
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ChatType {
+  PROMPT
+  RESPONSE
+}
+
+model Chat {
+  id        String   @id @default(cuid())
+  message   String
+  type      ChatType
+  codeId    String
+  code      Code     @relation(fields: [codeId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model File {
+  id        String   @id @default(cuid())
+  name      String
+  path      String
+  content   String
+  codeId    String
+  code      Code     @relation(fields: [codeId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

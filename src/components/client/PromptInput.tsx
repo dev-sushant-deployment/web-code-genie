@@ -16,12 +16,12 @@ export const PromptInput = () => {
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
         placeholder="Describe your Imagination here..."
-        className="flex-grow placeholder:font-semibold bg-gray-600 text-white placeholder:text-gray-100"
+        className="flex-grow placeholder:font-semibold"
         ref={promptInputRef}
       />
       <Link href={`/workspace?prompt=${prompt}`}>
         <Button
-          className="flex justify-between items-center gap-1 bg-white text-black hover:bg-gray-200"
+          className="flex justify-between items-center gap-1"
           ref={generateButtonRef}
         >
           <Sparkles/>

@@ -24,6 +24,7 @@
 .DS_Store
 *.pem
 /src/demoData.ts
+/prisma/migrations/
 
 # debug
 npm-debug.log*
