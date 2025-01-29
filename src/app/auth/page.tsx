@@ -11,10 +11,13 @@ import { login as actionLogin, signup as actionSignup } from "@/actions/user";
 import { Loader } from "lucide-react";
 import { ACCESS_TOKEN_KEY } from "@/constants";
 import eventEmitter from "@/helper/eventEmitter";
+import { useCode } from "@/context/code";
+import { createCode } from "@/actions/code";
 
 const AuthPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { prompt: initialPrompt, response } = useCode();
   const login= searchParams.get('login');
   const signup = searchParams.get('signup');
   const prompt = searchParams.get('prompt');
@@ -38,6 +41,26 @@ const AuthPage = () => {
     }
     return true;
   }
+  const handleSuccess = async (toastId : string | number) => {
+    if (prompt) {
+      toast.loading("Saving code...", { id: toastId });
+      const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+      if (!accessToken) throw new Error("Access token not found");
+      const { data, error } = await createCode(accessToken, response, initialPrompt);
+      if (error) throw new Error(error);
+      if (!data) throw new Error("An Unexpected error occurred");
+      const codeId = data.id;
+      toast.success("Code saved successfully", { id: toastId });
+      setLoading(false);
+      router.back();
+      console.log("navigate to", `/workspace/${codeId}?prompt=${prompt}&token=${accessToken}`);
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      router.replace(`/workspace/${codeId}?prompt=${prompt}&token=${accessToken}`);
+    } else {
+      setLoading(false);
+      router.push("/");
+    }
+  }
   const handleLogin = async () => {
     if (validate()) {
       setLoading(true);
@@ -49,8 +72,7 @@ const AuthPage = () => {
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
         eventEmitter.emit("user:login", { name });
         toast.success("Logged in successfully", { id: toastId });
-        setLoading(false);
-        router.push("/");
+        handleSuccess(toastId);
       } catch (error) {
         const message = error instanceof Error ? error.message : "An Unexpected error occurred";
         toast.error(message, { id: toastId });
@@ -70,8 +92,7 @@ const AuthPage = () => {
         const { error } = await actionSignup(name, email, password);
         if (error) throw new Error(error);
         toast.success("Signed up successfully", { id: toastId });
-        setLoading(false);
-        router.push("/");
+        handleSuccess(toastId);
       } catch (error) {
         const message = error instanceof Error ? error.message : "An Unexpected error occurred";
         toast.error(message, { id: toastId });
@@ -87,12 +108,12 @@ const AuthPage = () => {
       <TabsList className="flex gap-4 mb-4">
         <TabsTrigger
           value="login"
-          onClick={() => router.replace("/auth?login=true&signup=false")}
+          onClick={() => router.replace(`/auth?login=true&signup=false${prompt ? `&prompt=${prompt}` : ""}`)}
           className="w-1/2"
         >Login</TabsTrigger>
         <TabsTrigger
           value="signup"
-          onClick={() => router.replace("/auth?login=false&signup=true")}
+          onClick={() => router.replace(`/auth?login=false&signup=true${prompt ? `&prompt=${prompt}` : ""}`)}
           className="w-1/2"
         >Signup</TabsTrigger>
       </TabsList>

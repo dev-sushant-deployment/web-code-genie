@@ -59,4 +59,6 @@ model File {
   code      Code     @relation(fields: [codeId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([path, codeId])
 }

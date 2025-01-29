@@ -25,6 +25,7 @@
 *.pem
 /src/demoData.ts
 /prisma/migrations/
+TODO.txt
 
 # debug
 npm-debug.log*

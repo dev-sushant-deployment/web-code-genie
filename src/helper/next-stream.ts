@@ -1,3 +1,4 @@
+import { GEMINI_CODE_GENERATION_MODEL } from "@/constants";
 import { GeminiCodeParser } from "gemini-code-parser";
 import { NextResponse } from "next/server";
 
@@ -20,7 +21,7 @@ export const generateResponse = async (prompt : string, controller: ReadableStre
   if (!GEMINI_CODE_GENERATION_API_KEY) {
     throw new Error('Missing Gemini API key');
   }
-  const codeParser = new GeminiCodeParser(GEMINI_CODE_GENERATION_API_KEY, "gemini-1.5-flash");
+  const codeParser = new GeminiCodeParser(GEMINI_CODE_GENERATION_API_KEY, GEMINI_CODE_GENERATION_MODEL);
   codeParser.on('title', (data) => writeResponse(controller, data));
   codeParser.on('file', (data) => {
     data.name = data.name.split('/').pop();
@@ -34,10 +35,6 @@ export const generateResponse = async (prompt : string, controller: ReadableStre
     writeResponse(controller, data)
   });
   codeParser.on('response', (data) => writeResponse(controller, data));
-  codeParser.on('response-end', () => {
-    writeResponse(controller, { done: true });
-    controller.close();
-  });
   const response = await codeParser.generateParsedCodeStream(prompt);
-  return {...response, files: response.files.map(file => ({ ...file, name: file.name.split('/').pop() }))};
+  return {...response, files: response.files.map(file => ({ ...file, name: file.name.split('/').pop() || file.name }))};
 }

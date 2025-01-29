@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { ACCESS_TOKEN_KEY } from "@/constants";
 import { Avatar, AvatarFallback } from "../ui/avatar";
 import { middleware } from "@/actions/user";
+import eventEmitter from "@/helper/eventEmitter";
 
 export const checkAuth = () => {
   if (localStorage.getItem(ACCESS_TOKEN_KEY)) return true;
@@ -32,6 +33,10 @@ export const Auth = () => {
       }
     }
     authenticate();
+    eventEmitter.on("user:login", setName);
+    return () => {
+      eventEmitter.off("user:login", setName);
+    }
   }, [])
   if (!name) return (
     <>
@@ -54,7 +59,7 @@ export const Auth = () => {
       </li>
       <li>
         <Avatar>
-          <AvatarFallback>{name?.split(" ").map(word => word[0].toUpperCase()).join("") || "?"}</AvatarFallback>
+          {/* <AvatarFallback>{name?.split(" ").map(word => word[0].toUpperCase()).join("") || "?"}</AvatarFallback> */}
         </Avatar>
       </li>
     </>

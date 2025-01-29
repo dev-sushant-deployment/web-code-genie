@@ -47,7 +47,7 @@ export const login = async (email: string, password: string) => {
     if (!user) return { error: 'User not found', status: 404 };
     const isPasswordCorrect = compare(password, user.password);
     if (!isPasswordCorrect) return { error: 'Invalid password', status: 400 };
-    const accessToken = jwt.sign({ email, name }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const accessToken = jwt.sign({ email, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
     return { accessToken, name: user.name, status: 200 };
   } catch (error) {
     console.log("error in login", error);
@@ -70,7 +70,7 @@ export const middleware = async (accessToken: string) => {
       select: { name: true }
     });
     if (!user) return { error: 'User not found', status: 404 };
-    return { name: user.name , status: 200 };
+    return { name: user.name , email, status: 200 };
   } catch (error) {
     // console.log("error in middleware", error);
     const message = error instanceof Error ? error.message : 'An Unexpected error occurred';

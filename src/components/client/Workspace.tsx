@@ -14,8 +14,10 @@ import { setPrismaLanguage } from "@/helper/Editor/customLanguage";
 import { checkAuth } from "./Auth";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useCode } from "@/context/code";
 
 interface WorkspaceProps {
+  codeId? : string;
   initialChat?: {
     message: string;
     type: 'PROMPT' | 'RESPONSE';
@@ -27,7 +29,7 @@ interface WorkspaceProps {
   }[];
 }
 
-export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeFiles }) => {
+export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, initialCodeFiles }) => {
   // initialChat = demoChats;
   // initialCodeFiles = demoCodeFiles;
 
@@ -44,6 +46,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
   }];
 
   const router = useRouter();
+  const { setResponse, setPrompt: setInitialPrompt } = useCode();
 
   const [prompt, setPrompt] = useState<string>(initialPrompt || '');
   const [chat, setChat] = useState<{ message: string; type: 'PROMPT' | 'RESPONSE'; }[]>(initialChat || []);
@@ -51,6 +54,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [generating, setGenerating] = useState<string>("");
   const [fileSystem, setFileSystem] = useState<FileSystemType>();
+  const [finalResponse, setFinalResponse] = useState<{ title?: string; files: { name: string; path: string; content: string }[]; response: string }>({ files: [], response: '' });
 
   const updateFile = (file : File) => {
     setFileSystem(prev => {
@@ -95,17 +99,18 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
     if (!prompt) return;
     let url = `/api/generate?prompt=${prompt}`;
     if (chat.length > 1) {
+      if (chat.length == 2 && !initialCodeFiles && initialPrompt) {
+        setInitialPrompt(initialPrompt);
+        setResponse(finalResponse);
+      }
       const loggedin = checkAuth();
       if (!loggedin) {
         toast.info("Login to modify and save your code");
-        router.push('/auth?login=true&signup=false');
+        router.push(`/auth?login=true&signup=false&prompt=${prompt}`);
         return;
       }
-      if (currentUrl.includes('/code/')) {
-        let codeId = currentUrl.split('/').slice(-1)[0];
-        if (!codeId) codeId = currentUrl.split('/').slice(-2)[0];
-        url = `/api/modify/${codeId}?prompt=${prompt}`;
-      } else throw new Error('Invalid URL');
+      if (codeId) url = `/api/modify/${codeId}?prompt=${prompt}`;
+      else throw new Error('Invalid URL');
     }
     const eventSource = new EventSource(url);
     setPrompt("");
@@ -121,13 +126,14 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialChat, initialCodeF
           content
         });
         setSelectedFile(data.path+'/');
-      } else if (data.response) {
+      } else if (data.response && !data.done) {
         setChat(prev => {
           if (prev.slice(-1)[0]?.type === 'PROMPT') return [...prev, { message: data.response, type: 'RESPONSE' }];
           prev[prev.length - 1].message = prev[prev.length - 1].message.length > data.response.length ? prev[prev.length - 1].message : data.response;
           return prev;
         })
       } else if (data.done) {
+        setFinalResponse(data.response);
         eventSource.close();
         setGenerating("");
       }

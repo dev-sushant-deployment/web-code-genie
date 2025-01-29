@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
       async start(controller) {
         try {
           const response = await generateResponse(codeGenerationPrompt, controller);
-          writeResponse(controller, response);
+          writeResponse(controller, { response, done : true });
+          controller.close();
         } catch (error) {
           const message = error instanceof Error ? error.message : 'An Unexpected error occurred';
           controller.enqueue(`event: error\ndata: ${JSON.stringify({ message, status: 500 })}\n\n`);

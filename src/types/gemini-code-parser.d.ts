@@ -1,8 +1,9 @@
 declare module "gemini-code-parser" {
 
   export interface ParsedCodeResponse {
+    title: string;
     files: Array<{ name: string; path: string, content: string }>;
-    [key: string]: any;
+    response: string;
   }
 
   export class GeminiCodeParser extends EventEmitter {
