@@ -55,7 +55,7 @@ const AuthPage = () => {
       router.back();
       console.log("navigate to", `/workspace/${codeId}?prompt=${prompt}&token=${accessToken}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
-      router.replace(`/workspace/${codeId}?prompt=${prompt}&token=${accessToken}`);
+      router.push(`/workspace/${codeId}?prompt=${prompt}&token=${accessToken}`);
     } else {
       setLoading(false);
       router.push("/");
@@ -66,11 +66,12 @@ const AuthPage = () => {
       setLoading(true);
       const toastId = toast.loading("Logging in...");
       try {
-        const { error, accessToken } = await actionLogin(email, password);
+        console.log("logging in", email, password);
+        const { error, name : loggedInUserName, accessToken } = await actionLogin(email, password);
         if (error) throw new Error(error);
-        if (!accessToken) throw new Error("An Unexpected error occurred");
+        if (!accessToken && !loggedInUserName) throw new Error("An Unexpected error occurred");
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-        eventEmitter.emit("user:login", { name });
+        eventEmitter.emit("user:login", { userName: loggedInUserName });
         toast.success("Logged in successfully", { id: toastId });
         handleSuccess(toastId);
       } catch (error) {
@@ -91,6 +92,7 @@ const AuthPage = () => {
       try {
         const { error } = await actionSignup(name, email, password);
         if (error) throw new Error(error);
+        eventEmitter.emit("user:login", { name });
         toast.success("Signed up successfully", { id: toastId });
         handleSuccess(toastId);
       } catch (error) {

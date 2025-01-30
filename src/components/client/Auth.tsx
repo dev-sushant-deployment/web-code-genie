@@ -33,9 +33,12 @@ export const Auth = () => {
       }
     }
     authenticate();
-    eventEmitter.on("user:login", setName);
+    const handleLogin = ({ userName } : { userName : string }) => {
+      setName(userName)
+    }
+    eventEmitter.on("user:login", handleLogin);
     return () => {
-      eventEmitter.off("user:login", setName);
+      eventEmitter.off("user:login", handleLogin);
     }
   }, [])
   if (!name) return (
@@ -59,7 +62,7 @@ export const Auth = () => {
       </li>
       <li>
         <Avatar>
-          {/* <AvatarFallback>{name?.split(" ").map(word => word[0].toUpperCase()).join("") || "?"}</AvatarFallback> */}
+          <AvatarFallback>{name?.split(" ").map(word => word[0].toUpperCase()).join("") || "?"}</AvatarFallback>
         </Avatar>
       </li>
     </>

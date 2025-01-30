@@ -10,7 +10,7 @@ export const createCode = async (
     files: { name: string; path: string; content: string }[];
     response: string;
   },
-  prompt: string
+  prompt: string,
 ) => {
   try {
     const { email, error, status } = await middleware(accessToken);
@@ -101,6 +101,11 @@ export const getCode = async (accessToken: string, id: string) => {
     });
     if (!code) return { error: 'Code not found', status: 404 };
     if (code.userId !== user.id) return { error: 'Unauthorized', status: 401 };
+    code.files = code.files.map(({ name, path, content }) => ({
+      name,
+      path: path[path.length - 1] === '/' ? path.slice(0, -1) : path,
+      content
+    }));
     return { data: code, status: 200 };
   } catch (error) {
     // console.log("error in getting code", error);

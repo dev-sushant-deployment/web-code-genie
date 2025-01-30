@@ -50,7 +50,7 @@ export const login = async (email: string, password: string) => {
     const accessToken = jwt.sign({ email, name: user.name }, process.env.JWT_SECRET, { expiresIn: '7d' });
     return { accessToken, name: user.name, status: 200 };
   } catch (error) {
-    console.log("error in login", error);
+    // console.log("error in login", error);
     const message = error instanceof Error ? error.message : 'An Unexpected error occurred';
     return { error: message, status: 500 };
   }

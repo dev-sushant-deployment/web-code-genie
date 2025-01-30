@@ -15,10 +15,13 @@ export async function GET(req: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
+          console.log('Generating code for the prompt');
           const response = await generateResponse(codeGenerationPrompt, controller);
+          console.log('Code generation completed');
           writeResponse(controller, { response, done : true });
           controller.close();
         } catch (error) {
+          console.log('Error in code generation', error);
           const message = error instanceof Error ? error.message : 'An Unexpected error occurred';
           controller.enqueue(`event: error\ndata: ${JSON.stringify({ message, status: 500 })}\n\n`);
           controller.close();
@@ -27,6 +30,7 @@ export async function GET(req: NextRequest) {
     });
     return new NextResponse(stream, { headers });
   } catch (error) {
+    console.log(error);
     const message = error instanceof Error ? error.message : 'An Unexpected error occurred';
     return customError({ message, status: 500 });
   }

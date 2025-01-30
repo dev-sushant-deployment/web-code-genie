@@ -88,15 +88,8 @@ export async function GET(req: NextRequest, { params } : ModifyRouteParams) {
                     type: 'RESPONSE',
                   },
                 ]
-              },
-              files: {
-                create: response.files.map(({ name, path, content }) => ({
-                  name: name,
-                  path,
-                  content,
-                })),
               }
-            },
+            }
           })
           writeResponse(controller, { done: true });
         } catch (error) {

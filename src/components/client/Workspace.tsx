@@ -37,13 +37,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
   const currentUrl = usePathname();
   const isAuthRoute = currentUrl.includes('/auth');
 
-
   if ((!initialChat || !initialCodeFiles) && !initialPrompt && !isAuthRoute) throw new Error('Prompt is required to generate code');
-
-  if (!initialChat && initialPrompt) initialChat = [{
-    message: initialPrompt,
-    type: 'PROMPT'
-  }];
 
   const router = useRouter();
   const { setResponse, setPrompt: setInitialPrompt } = useCode();
@@ -54,7 +48,8 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [generating, setGenerating] = useState<string>("");
   const [fileSystem, setFileSystem] = useState<FileSystemType>();
-  const [finalResponse, setFinalResponse] = useState<{ title?: string; files: { name: string; path: string; content: string }[]; response: string }>({ files: [], response: '' });
+  const [title, setTitle] = useState<string>("");
+
 
   const updateFile = (file : File) => {
     setFileSystem(prev => {
@@ -95,13 +90,38 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
     })
   }
 
+  const fileSystemToCodeFiles = (fs: FileSystemType) => {
+    const files: File[] = [];
+    const traverse = (dir: FileSystemType) => {
+      if (dir.content) {
+        files.push({
+          name: dir.name,
+          path: dir.path[dir.path.length - 1] === '/' ? dir.path.slice(0, -1) : dir.path,
+          content: dir.content
+        });
+      }
+      dir.children?.forEach(traverse);
+    }
+    traverse(fs);
+    return files;
+  }
+
   const generate = async () => {
     if (!prompt) return;
+    setChat(prev => {
+      if (prev.length == 0) return [{ message: prompt, type: 'PROMPT' }];
+      if (prev.slice(-1)[0]?.type === 'PROMPT') return prev;
+      return [...prev, { message: prompt, type: 'PROMPT' }]
+    });
     let url = `/api/generate?prompt=${prompt}`;
     if (chat.length > 1) {
-      if (chat.length == 2 && !initialCodeFiles && initialPrompt) {
+      if (chat.length == 2 && !initialCodeFiles && initialPrompt && fileSystem) {
         setInitialPrompt(initialPrompt);
-        setResponse(finalResponse);
+        setResponse({
+          title,
+          files: fileSystemToCodeFiles(fileSystem),
+          response: chat[1].message
+        });
       }
       const loggedin = checkAuth();
       if (!loggedin) {
@@ -113,11 +133,13 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
       else throw new Error('Invalid URL');
     }
     const eventSource = new EventSource(url);
+    console.log("eventSource", eventSource);
     setPrompt("");
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log("data", data);
-      if (data.name && data.path) {
+      if (data.title) setTitle(data.title);
+      else if (data.name && data.path) {
         setGenerating(data.path);
         const content = data.content || '';
         updateFile({
@@ -133,10 +155,14 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
           return prev;
         })
       } else if (data.done) {
-        setFinalResponse(data.response);
         eventSource.close();
         setGenerating("");
       }
+    }
+    eventSource.onerror = (error) => {
+      console.log(error);
+      eventSource.close();
+      toast.error("An error occurred while generating code");
     }
   }
 
@@ -163,6 +189,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
 
   useEffect(() => {
     if (codeFiles) {
+      console.log("codeFiles", codeFiles);
       const fs: FileSystemType = {
         name: 'root',
         path: '/',
@@ -233,7 +260,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
               </p>
             </div>
           ))}
-          {chat.slice(-1)[0].type === 'PROMPT' &&
+          {chat.length > 0 && chat.slice(-1)[0].type === 'PROMPT' &&
             <div className="w-full flex items-start justify-start gap-3 text-sm font-semibold">
               <div className="p-2 rounded-full bg-white text-black">
                 <Sparkles size={24}/>
