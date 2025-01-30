@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input"
 import { Button } from "../ui/button";
 import { Code, Download, Laptop, Loader, MessageCircle, Sparkles } from "lucide-react";
@@ -49,7 +49,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
   const [generating, setGenerating] = useState<string>("");
   const [fileSystem, setFileSystem] = useState<FileSystemType>();
   const [title, setTitle] = useState<string>("");
-
+  const chatRef = useRef<HTMLDivElement | null>(null);
 
   const updateFile = (file : File) => {
     setFileSystem(prev => {
@@ -233,6 +233,15 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
   }, []);
 
   useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: 'smooth'
+      })
+    }
+  }, [chat]);
+
+  useEffect(() => {
     console.log("fs", fileSystem);
   }, [fileSystem]);
 
@@ -243,7 +252,10 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
   return (
     <div className="w-[90vw] h-[80vh] flex items-center gap-3">
       <div className="w-[30%] h-full border-[1px] border-gray-700 rounded-xl flex flex-col items-center justify-center">
-        <div className="flex-grow rounded-t-xl w-full overflow-y-scroll p-4 flex flex-col gap-3">
+        <div
+          className="flex-grow rounded-t-xl w-full overflow-y-scroll p-4 flex flex-col gap-3"
+          ref={chatRef}
+        >
           {chat.map((chatItem, index) => (
             <div key={index} className="w-full flex items-start justify-start gap-3 text-sm font-semibold">
               {chatItem.type === 'PROMPT' ?

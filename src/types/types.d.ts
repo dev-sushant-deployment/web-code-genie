@@ -10,3 +10,9 @@ export type File = {
   path: string;
   content: string;
 }
+
+export type Code = {
+  title: string;
+  updatedAt: Date;
+  id: string;
+}

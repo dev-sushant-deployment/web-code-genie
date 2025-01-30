@@ -71,7 +71,7 @@ const AuthPage = () => {
         if (error) throw new Error(error);
         if (!accessToken && !loggedInUserName) throw new Error("An Unexpected error occurred");
         localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-        eventEmitter.emit("user:login", { userName: loggedInUserName });
+        eventEmitter.emit("user:login", { userName: loggedInUserName, userEmail: email });
         toast.success("Logged in successfully", { id: toastId });
         handleSuccess(toastId);
       } catch (error) {
@@ -92,7 +92,7 @@ const AuthPage = () => {
       try {
         const { error } = await actionSignup(name, email, password);
         if (error) throw new Error(error);
-        eventEmitter.emit("user:login", { name });
+        eventEmitter.emit("user:login", { userName: name, userEmail: email });
         toast.success("Signed up successfully", { id: toastId });
         handleSuccess(toastId);
       } catch (error) {

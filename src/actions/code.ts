@@ -113,3 +113,35 @@ export const getCode = async (accessToken: string, id: string) => {
     return { error: message, status: 500 };
   }
 }
+
+export const getCodesMeta = async (accessToken: string) => {
+  try {
+    const { email, error, status } = await middleware(accessToken);
+    if (error && status) return { error, status };
+    const user = await db.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+      }
+    });
+    if (!user) return { error: 'User not found', status: 404 };
+    const codes = await db.code.findMany({
+      where: {
+        userId: user.id,
+      },
+      select: {
+        id: true,
+        title: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      }
+    });
+    return { codes, status: 200 };
+  } catch (error) {
+    // console.log("error in getting codes", error);
+    const message = error instanceof Error ? error.message : 'An Unexpected error occurred';
+    return { error: message, status: 500 };
+  }
+}
