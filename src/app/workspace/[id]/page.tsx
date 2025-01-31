@@ -13,10 +13,25 @@ const WorkspacePage : React.FC<WorkspacePageProps> = async ({ params, searchPara
   if (error && status) throw new Error(error);
   if (!data) throw new Error('An unexpected error occurred');
   const { id : codeId, chat, files } = data;
+  let uniqueChat : {
+    message: string;
+    type: 'PROMPT' | 'RESPONSE';
+  }[] = [];
+  chat.forEach(({ message, type }, index) => {
+    if (index >= 3) {
+      if (type == 'RESPONSE') {
+        if (chat[index -3].type == chat[index - 1].type && chat[index - 3].message == chat[index - 1].message) {
+          uniqueChat = uniqueChat.slice(0, -3);
+          uniqueChat.push(chat[index - 1]);
+        }
+      }
+    }
+    uniqueChat.push({ message, type });
+  });
   return (
     <Workspace
       codeId={codeId}
-      initialChat={chat}
+      initialChat={uniqueChat}
       initialCodeFiles={files}
     />
   )
