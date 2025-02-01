@@ -15,6 +15,8 @@ import { checkAuth } from "./Auth";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useCode } from "@/context/code";
+import { createCode } from "@/actions/code";
+import { ACCESS_TOKEN_KEY } from "@/constants";
 
 interface WorkspaceProps {
   codeId? : string;
@@ -108,11 +110,6 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
 
   const generate = async () => {
     if (!prompt) return;
-    setChat(prev => {
-      if (prev.length == 0) return [{ message: prompt, type: 'PROMPT' }];
-      if (prev.slice(-1)[0]?.type === 'PROMPT') return prev;
-      return [...prev, { message: prompt, type: 'PROMPT' }]
-    });
     let url = `/api/generate?prompt=${prompt}`;
     if (chat.length > 1) {
       if (chat.length == 2 && !initialCodeFiles && initialPrompt && fileSystem) {
@@ -126,21 +123,28 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
       const loggedin = checkAuth();
       if (!loggedin) {
         toast.info("Login to modify and save your code");
-        router.push(`/auth?login=true&signup=false&prompt=${prompt}`);
+        router.push(`/auth?login=true&signup=false&prompt=${prompt}&intercepted=true`);
         return;
       }
       if (codeId) url = `/api/modify/${codeId}?prompt=${prompt}`;
       else throw new Error('Invalid URL');
     }
+    setChat(prev => {
+      if (prev.length == 0) return [{ message: prompt, type: 'PROMPT' }];
+      if (prev.slice(-1)[0]?.type === 'PROMPT') return prev;
+      return [...prev, { message: prompt, type: 'PROMPT' }]
+    });
     const eventSource = new EventSource(url);
     console.log("eventSource", eventSource);
     setPrompt("");
+    const toastId = toast.loading("Generating Steps...");
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log("data", data);
       if (data.title) setTitle(data.title);
       else if (data.name && data.path) {
         setGenerating(data.path);
+        toast.loading(`Generating ${data.name}...`, { id: toastId });
         const content = data.content || '';
         updateFile({
           name: data.name,
@@ -149,6 +153,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
         });
         setSelectedFile(data.path+'/');
       } else if (data.response && !data.done) {
+        toast.loading("Generating response...", { id: toastId });
         setChat(prev => {
           if (prev.slice(-1)[0]?.type === 'PROMPT') return [...prev, { message: data.response, type: 'RESPONSE' }];
           prev[prev.length - 1].message = prev[prev.length - 1].message.length > data.response.length ? prev[prev.length - 1].message : data.response;
@@ -156,13 +161,14 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
         })
       } else if (data.done) {
         eventSource.close();
+        toast.success("Code generated successfully", { id: toastId});
         setGenerating("");
       }
     }
     eventSource.onerror = (error) => {
       console.log(error);
       eventSource.close();
-      toast.error("An error occurred while generating code");
+      toast.error("An error occurred while generating code", { id: toastId });
     }
   }
 
@@ -239,6 +245,18 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
         behavior: 'smooth'
       })
     }
+    let timeoutId : NodeJS.Timeout;
+    if (chat.length == 2 && !initialCodeFiles && initialPrompt) {
+      timeoutId = setTimeout(() => {
+        const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+        if (token && fileSystem) createCode(token, {
+          title,
+          files: fileSystemToCodeFiles(fileSystem),
+          response: chat[1].message
+        }, initialPrompt);
+      }, 2000);
+    }
+    return () => clearTimeout(timeoutId);
   }, [chat]);
 
   useEffect(() => {

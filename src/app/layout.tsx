@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/general/Navbar";
 import { Footer } from "@/components/general/Footer";
-import { Toaster } from "sonner";
-
+import { Toaster } from "@/components/client/Toaster";
 
 export const metadata: Metadata = {
   title: "Web Code Genie",
@@ -20,11 +19,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth dark">
       <body>
-        <Toaster
-          richColors={true}
-          theme="light"
-          position="top-center"
-        />
+        <Toaster />
         <div className="min-h-lvh flex flex-col items-center justify-between">
           <Navbar />
           {children}

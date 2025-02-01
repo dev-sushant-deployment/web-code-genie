@@ -1,5 +1,5 @@
 import { CODE_MODIFICATION_PROMPT } from "@/helper/Gemini/prompts";
-import { customError, generateResponse, writeResponse, headers } from "@/helper/next-stream";
+import { customError, generateResponse, writeResponse, headers, formatOutput } from "@/helper/next-stream";
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -54,8 +54,9 @@ export async function GET(req: NextRequest, { params } : ModifyRouteParams) {
         try {
           const response = await generateResponse(codeModificationPrompt, controller);
           await db.$transaction(
-            response.files.map(({ name, path, content }) =>
-              db.file.upsert({
+            response.files.map(({ name, path, content }) => {
+              ({ name, path, content } = formatOutput(name, path, content));
+              return db.file.upsert({
                 where: {
                   path_codeId: {
                     path,
@@ -69,7 +70,7 @@ export async function GET(req: NextRequest, { params } : ModifyRouteParams) {
                   content,
                   codeId,
                 }
-              })
+              })}
             )
           );
           await db.code.update({

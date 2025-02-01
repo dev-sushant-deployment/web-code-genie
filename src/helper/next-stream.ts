@@ -16,6 +16,18 @@ export const writeResponse = (controller: ReadableStreamDefaultController<any>, 
   controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+export const formatOutput = (name: string, path: string, content: string) => {
+  name = name.split('/').pop() || name;
+  if (path.split('/')[0] == 'pages') path = 'src/app' + path.split('pages')[1];
+  if (path.split('/')[0] == 'app') path = 'src/' + path;
+  if (path[0] != '/') path = '/' + path;
+  if (content) {
+    const match = content.match(/^```(?:\w+)?\n([\s\S]*?)\n```$/);
+    if (match) content = match[1];
+  }
+  return { name, path, content };
+}
+
 export const generateResponse = async (prompt : string, controller: ReadableStreamDefaultController<any>) => {
   const { GEMINI_CODE_GENERATION_API_KEY } = process.env;
   if (!GEMINI_CODE_GENERATION_API_KEY) {
@@ -24,14 +36,10 @@ export const generateResponse = async (prompt : string, controller: ReadableStre
   const codeParser = new GeminiCodeParser(GEMINI_CODE_GENERATION_API_KEY, GEMINI_CODE_GENERATION_MODEL);
   codeParser.on('title', (data) => writeResponse(controller, data));
   codeParser.on('file', (data) => {
-    data.name = data.name.split('/').pop();
-    if (data.path.split('/')[0] == 'pages') data.path = 'src/app' + data.path.split('pages')[1];
-    if (data.path.split('/')[0] == 'app') data.path = 'src/' + data.path;
-    if (data.path[0] != '/') data.path = '/' + data.path;
-    if (data.content) {
-      const match = data.content.match(/^```(?:\w+)?\n([\s\S]*?)\n```$/);
-      if (match) data.content = match[1];
-    }
+    const { name, path, content } = formatOutput(data.name, data.path, data.content);
+    data.name = name;
+    data.path = path;
+    data.content = content;
     writeResponse(controller, data)
   });
   codeParser.on('response', (data) => writeResponse(controller, data));
