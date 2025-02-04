@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input"
 import { Button } from "../ui/button";
-import { Code, Download, Laptop, Loader, MessageCircle, Sparkles } from "lucide-react";
+import { Code, Download, Laptop, Loader, MessageCircle, Save, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import type { File, FileSystem as FileSystemType } from '@/types/types';
 import { FileSystem } from "./FileSystem";
@@ -19,9 +19,10 @@ import { createCode } from "@/actions/code";
 import { ACCESS_TOKEN_KEY, baseConfig } from "@/constants";
 import { FileSystemTree } from "@webcontainer/api"
 import axios from "axios";
+import { updateFiles } from "@/actions/file";
 
 interface WorkspaceProps {
-  codeId? : string;
+  initialCodeId? : string;
   initialTitle?: string;
   initialChat?: {
     message: string;
@@ -34,7 +35,7 @@ interface WorkspaceProps {
   }[];
 }
 
-export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, initialChat, initialCodeFiles }) => {
+export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTitle, initialChat, initialCodeFiles }) => {
   // initialChat = demoChats;
   // initialCodeFiles = demoCodeFiles;
 
@@ -47,6 +48,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, ini
   const router = useRouter();
   const { setResponse, setPrompt: setInitialPrompt, webContainer } = useCode();
 
+  const [codeId, setCodeId] = useState<string>(initialCodeId || '');
   const [prompt, setPrompt] = useState<string>(initialPrompt || '');
   const [chat, setChat] = useState<{ message: string; type: 'PROMPT' | 'RESPONSE'; }[]>(initialChat || []);
   const [codeFiles, setCodeFiles] = useState<{ name: string; path: string; content?: string; }[]>(initialCodeFiles || []);
@@ -56,6 +58,8 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, ini
   const [title, setTitle] = useState<string>(initialTitle || 'Untitled');
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [tabValue, setTabValue] = useState<'code' | 'preview'>('code');
+  const [changedFiles, setChangedFiles] = useState<{ name: string, path: string, orgContent: string }[]>([]);
+  const [saving, setSaving] = useState<boolean>(false);
   const chatRef = useRef<HTMLDivElement | null>(null);
 
   const updateFile = (file : File) => {
@@ -305,6 +309,70 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, ini
     }
   };
   
+  const handleEditorChange = (code: string) => {
+    const changedFileIndex = changedFiles.findIndex((f) => f.path + '/' === selectedFile);
+    if (changedFileIndex === -1) {
+      const newChangedFile = codeFiles.find((f) => f.path + '/' === selectedFile);
+      if (!newChangedFile) return;
+      setChangedFiles((prevFiles) => [...prevFiles, {
+        name: newChangedFile.name || '',
+        path: newChangedFile.path || '',
+        orgContent: newChangedFile.content || ''
+      }]);
+    } else {
+      const changedFileOrgContent = changedFiles[changedFileIndex].orgContent;
+      if (code === changedFileOrgContent) {
+        setChangedFiles((prevFiles) => {
+          const updatedFiles = [...prevFiles];
+          updatedFiles.splice(changedFileIndex, 1);
+          return updatedFiles;
+        });
+      }
+    }
+    setCodeFiles((prevFiles) => {
+      const existingFileIndex = prevFiles.findIndex((f) => f.path + '/' === selectedFile);
+      if (existingFileIndex !== -1) {
+        const updatedFiles = [...prevFiles];
+        updatedFiles[existingFileIndex] = {
+          ...prevFiles[existingFileIndex],
+          content: code
+        };
+        return updatedFiles;
+      }
+      return prevFiles;
+    });
+    updateFile({
+      name: selectedFile.split('/').slice(-2)[0],
+      path: selectedFile,
+      content: code
+    });
+  }
+
+  const saveChanges = async () => {
+    setSaving(true);
+    const toastId = toast.loading("Saving changes...");
+    try {
+      const files : { name: string, path: string, content?: string }[] = [];
+      changedFiles.forEach((file) => {
+        const updatedFile = codeFiles.find((f) => f.path === file.path);
+        if (!updatedFile) return;
+        files.push(updatedFile);
+      });
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+      if (!token) throw new Error("Unauthorized");
+      if (!codeId) throw new Error("Invalid Code ID");
+      const { error, status } = await updateFiles(token, codeId, files);
+      if (error) throw new Error(error);
+      if (status !== 204) throw new Error("Failed to save changes");
+      setChangedFiles([]);
+      toast.success("Changes saved successfully", { id: toastId });
+    } catch (error) {
+      console.error("Error in saving Changes:", error);
+      const message = error instanceof Error ? error.message : "An Unexpected error occurred";
+      toast.error(message, { id: toastId });
+    }
+    setSaving(false);
+  }
 
   useEffect(() => {
     if (prompt) generate();
@@ -376,7 +444,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, ini
             return;
           }
           const { id } = data;
-          codeId = id;
+          setCodeId(id);
         };
       }, 2000);
     }
@@ -458,14 +526,26 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, ini
               <span>Preview</span>
             </TabsTrigger>
           </TabsList>
-          <Button
-            onClick={() => download()}
-            disabled={generating !== ""}
-            className="flex items-center justify-center gap-2"
-          >
-            <Download/>
-            <span>Download Code</span>
-          </Button>
+          <div className="flex justify-between gap-2 items-center">
+            {changedFiles.length > 0 && 
+              <Button
+                onClick={() => saveChanges()}
+                disabled={changedFiles.length === 0}
+                className="flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader className="animate-spin"/> : <Save/>}
+                <span>Save Changes</span>
+              </Button>
+            }
+            <Button
+              onClick={() => download()}
+              disabled={generating !== ""}
+              className="flex items-center justify-center gap-2"
+            >
+              <Download/>
+              <span>Download Code</span>
+            </Button>
+          </div>
         </div>
         <TabsContent
           value="code"
@@ -490,7 +570,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, ini
               {selectedFile && <Editor
                 beforeMount={handleEditorWillMount}
                 value={codeFiles?.find((file) => file.path + '/' === selectedFile)?.content}
-                // onChange={(code) => code && handleEditorChange(code)}
+                onChange={(code) => code && handleEditorChange(code)}
                 loading={<Loader size={24} className="animate-spin" color="white"/>}
                 language={getFileLanguage(selectedFile)}
                 theme="vs-dark"

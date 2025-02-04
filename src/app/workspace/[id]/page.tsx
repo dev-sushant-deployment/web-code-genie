@@ -30,7 +30,7 @@ const WorkspacePage : React.FC<WorkspacePageProps> = async ({ params, searchPara
   });
   return (
     <Workspace
-      codeId={codeId}
+      initialCodeId={codeId}
       initialTitle={title}
       initialChat={uniqueChat}
       initialCodeFiles={files}
