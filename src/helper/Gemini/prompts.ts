@@ -1,81 +1,114 @@
 const GENERAL_PROMPT = `
-Below Given is the description of a website that I want to build.
-I want to build this website in complete Next.js app router with complete TypeScript.
-UI/UX should be very beautiful and attractive.
-The website should be responsive and should work on all devices.
-The website should contain as many features as possible.
-Also, write complete backend code for the website as it is written in Next.js.
-Treat this website as a complete full-stack project.
+Below is the description of a website that I want to build.
+
+- The website should be a **full-stack Next.js 14 project** using the App Router and JavaScript.
+- UI/UX should be **modern, elegant, and responsive** across all devices.
+- Use **Tailwind CSS** for styling.
+- Include **Dark Mode Support** using Tailwind's dark mode feature.
+- Avoid unnecessary animations but ensure a smooth, polished UI.
+- Implement authentication if applicable (e.g., NextAuth.js).
+- Follow the **best practices of Next.js 14 App Router**.
+- The project should be structured properly, with separate concerns for **components, API routes, and utilities**.
+
+The website should have **as many relevant features as possible** to make it a complete, functional project.
+
+Write both **frontend and backend code** within Next.js.
 `;
+
+
+const ERROR_AVOIDANCE_PROMPT = `
+Strictly follow these Next.js best practices to avoid errors:
+
+✅ **Client vs Server**
+- Use **"use client"** in every React component that contains hooks ('useState', 'useEffect', 'useContext').
+- Keep **API routes, database connections, and sensitive operations in "use server"**.
+
+✅ **File Structure (Follow Exactly)**
+- The 'src/app/' directory should **ONLY contain API routes, layout, and pages**.
+- **Do not create extra folders inside** 'src/app/'. Other files should go in 'src/'.
+
+✅ **Important Required Files**
+Ensure these files exist to prevent compilation errors:
+- 'src/app/layout.jsx'
+- 'src/app/globals.css'
+- '/tailwind.config.js'
+- '/package.json'
+
+✅ **API Routes**
+- API functions should **always** use **named exports** instead of 'export default' to avoid conflicts.
+
+✅ **Correct Import/Export Usage**
+- Every import should be correct, and every function/component should be exported properly.
+
+🚨 **Do NOT generate any additional folders or files beyond the specified structure.**
+🚨 **Strictly ensure every file is at its correct location.**
+`;
+
 
 export const STEP_GENERATION_PROMPT = (prompt: string) => `
 ${GENERAL_PROMPT}
 
-Now, To accomplish all the above requirements,
-I want you to generate set of detailed steps, following which a complete website as described can be built.
+Now, to build the website described below:
 
-I wish to build website, as described below:
-${prompt}
+"${prompt}"
 
-Give response with detailed steps to build the website.
-`
+🔹 Provide **detailed step-by-step instructions** to achieve this.
+🔹 Break down the steps into clear, **actionable tasks** (Frontend, Backend, Database, etc.).
+🔹 Mention key **libraries/tools** needed (e.g., Tailwind, NextAuth, Prisma, WebSockets).
+🔹 Keep explanations concise but precise.
+
+Your response should be in **clear numbered steps**.
+`;
 
 export const CODE_GENERATION_PROMPT = (prompt: string, steps: string) => `
 ${GENERAL_PROMPT}
 
-Now, To accomplish all the above requirements,
-I want you to generate code for the website as described below:
-${prompt}
+To implement the website as described below:
+"${prompt}"
 
-Following are the detailed steps to build the website:
-${steps}
+Follow these steps to generate the required code:
+"${steps}"
 
-You should follow following folder structure:
-- prisma
+📂 **Folder Structure (Strictly Follow This)**
+- prisma/
   - schema.prisma
-- public (if required)
-- src
-  - app
-    - api
-      (folders and files of all the api routes should be inside this api folder)
-    - global.css
-    - layout.tsx
-    - page.tsx
-  - components
-    (folders and files of all the components should be inside this components folder)
-  (all other folders and files should be inside this src folder)
+- public/ (if needed)
+- src/
+  - app/
+    - api/ (ALL API routes must be inside this)
+    - globals.css
+    - layout.jsx
+    - page.jsx
+  - components/ (ALL UI components go here)
+  - utils/ (Helper functions)
 - .env
-- eslint.config.json
-- next-env.d.ts
-- next.config.ts
 - package.json
-- postcss.config.mjs
-- tailwind.config.ts
-- tsconfig.json
+- tailwind.config.js
 
-Strictly follow the above folder structure.
-Including all the required files and folders.
-Do not include any extra files or folders.
-Or dont mis-place any file or folder.
-each file and folder should be placed at its correct location.
-IMP: Do not include any folder other than api, or any pages of the website, inside the app directory,
-IMP: All these extra folders should be included in src directory directly, do not add them in /src/app directory.
+🚨 **Important Directives:**
+- **DO NOT** include extra folders inside 'src/app/' except 'api/', 'layout.jsx', and 'page.jsx'.
+- **DO NOT** generate unnecessary files.
+- Code should be **properly formatted** and in **JavaScript (no TypeScript)**.
 
-File should be well formatted and should be written in TypeScript.
-Avoid any extra tabs in code.
-As a file content there should on be the code nonthing else.
-`
+${ERROR_AVOIDANCE_PROMPT}
+`;
+
 
 export const CODE_MODIFICATION_PROMPT = (prompt: string, code: string) => `
 ${GENERAL_PROMPT}
 
-Below is the code of website that I built:
+🔹 Below is the current code:
+\`\`\`js
 ${code}
+\`\`\`
 
-Only respond with the files that you want to modify or add.
-Do not remove any file.
+🔹 Modify the code based on the following requirements:
+"${prompt}"
 
-Now, To accomplish all the above requirements,
-I want you to modify the code for the website as described below:
-${prompt}
-`
+🚨 **Guidelines for Modification:**
+- **Only return the modified files.** Do NOT remove or alter unrelated files.
+- **Preserve the original structure** and **do not introduce breaking changes**.
+- **Ensure all necessary imports/exports are correctly updated.**
+
+${ERROR_AVOIDANCE_PROMPT}
+`;

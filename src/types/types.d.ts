@@ -16,3 +16,15 @@ export type Code = {
   updatedAt: Date;
   id: string;
 }
+
+export type FileSystemTree = {
+  [key: string]: {
+    file: {
+      content: string;
+    }
+  }
+  |
+  {
+    directory: FileSystemTree;
+  }
+}

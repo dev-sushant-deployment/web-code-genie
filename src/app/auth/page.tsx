@@ -53,7 +53,6 @@ const AuthPage = () => {
       toast.success("Code saved successfully", { id: toastId });
       setLoading(false);
       router.back();
-      console.log("navigate to", `/workspace/${codeId}?prompt=${prompt}&token=${accessToken}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
       router.push(`/workspace/${codeId}?prompt=${prompt}&token=${accessToken}`);
     } else {
@@ -66,7 +65,6 @@ const AuthPage = () => {
       setLoading(true);
       const toastId = toast.loading("Logging in...");
       try {
-        console.log("logging in", email, password);
         const { error, name : loggedInUserName, accessToken } = await actionLogin(email, password);
         if (error) throw new Error(error);
         if (!accessToken && !loggedInUserName) throw new Error("An Unexpected error occurred");

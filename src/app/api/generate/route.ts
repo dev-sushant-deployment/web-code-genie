@@ -10,14 +10,11 @@ export async function GET(req: NextRequest) {
     const setGenerationPrompt = STEP_GENERATION_PROMPT(prompt);
     const stepResponse = await stepsGenerationModel.generateContent(setGenerationPrompt);
     const steps = stepResponse.response.text();
-    console.log("steps", steps);
     const codeGenerationPrompt = CODE_GENERATION_PROMPT(prompt, steps);
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          console.log('Generating code for the prompt');
           const response = await generateResponse(codeGenerationPrompt, controller);
-          console.log('Code generation completed');
           writeResponse(controller, { response, done : true });
           controller.close();
         } catch (error) {

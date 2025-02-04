@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Button } from "../ui/button";
+import { Button, buttonVariants } from "../ui/button";
 import { useEffect, useState } from "react";
 import { ACCESS_TOKEN_KEY } from "@/constants";
 import { Avatar, AvatarFallback } from "../ui/avatar";
@@ -10,11 +10,12 @@ import eventEmitter from "@/helper/eventEmitter";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "../ui/sheet";
 // import { demoCode } from "@/demoData";
 import { Code } from "@/types/types";
-import { ArrowRight, Clock } from "lucide-react";
+import { ArrowRight, Clock, Trash2 } from "lucide-react";
 import { ScrollArea } from "../ui/scroll-area";
-import { getCodesMeta } from "@/actions/code";
+import { deleteCode, getCodesMeta } from "@/actions/code";
 import { toast } from "sonner";
 import { Skeleton } from "../ui/skeleton";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog";
 
 export const checkAuth = () => {
   if (localStorage.getItem(ACCESS_TOKEN_KEY)) return true;
@@ -30,6 +31,21 @@ export const Auth = () => {
   const handleLogout = () => {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     setName("");
+  }
+  const handleDelete = async (id: string)  => {
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!accessToken) return;
+    const toastId = toast.loading("Deleting Code...");
+    try {
+      const { error, status } = await deleteCode(accessToken, id);
+      if (error && status) throw new Error(error);
+      setCodes(prev => prev.filter(code => code.id !== id));
+      toast.success("Code Deleted Successfully", { id: toastId });
+    } catch (error) {
+      console.log("error in deleteCode", error);
+      if (error instanceof Error) toast.error(error.message, { id: toastId });
+      else toast.error("An Unexpected error occurred", { id: toastId });
+    }
   }
   useEffect(() => {
     const authenticate = async () => {
@@ -138,7 +154,7 @@ export const Auth = () => {
                   <div className="text-center text-gray-500 text-3xl">No Code Generated Yet</div>
                 )}
                 {!loading && codes.map(code => (
-                  <div key={code.id} className="flex items-center justify-between border rounded-lg p-2 bg-card hover:bg-accent">
+                  <div key={code.id} className="flex items-center justify-between border rounded-lg p-2 bg-card hover:bg-accent group">
                     <div className="flex flex-col gap-1">
                       <h3 className="text-lg font-semibold">{code.title}</h3>
                       <div className="text-sm text-gray-500 flex items-center justify-start gap-2">
@@ -146,14 +162,42 @@ export const Auth = () => {
                         <span>{code.updatedAt.toDateString()}</span>
                       </div>
                     </div>
-                    <Link
-                      href={`/workspace/${code.id}?token=${localStorage.getItem(ACCESS_TOKEN_KEY)}`}
-                      onClick={() => setOpen(false)}
-                    >
-                      <Button variant="ghost">
-                        <ArrowRight size={24} />
-                      </Button>
-                    </Link>
+                    <div className="flex justify-end items-center group">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="destructive"
+                            className="group-hover:flex hidden"
+                          >
+                            <Trash2 className="h-1 w-1"/>
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete your
+                              code and remove your code`s data from our servers.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className={buttonVariants({ variant: 'destructive' })}
+                              onClick={() => handleDelete(code.id)}
+                            >Continue</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      <Link
+                        href={`/workspace/${code.id}?token=${localStorage.getItem(ACCESS_TOKEN_KEY)}`}
+                        onClick={() => setOpen(false)}
+                      >
+                        <Button variant="ghost">
+                          <ArrowRight size={24} />
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 ))}
               </div>

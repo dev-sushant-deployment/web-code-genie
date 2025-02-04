@@ -16,10 +16,13 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { useCode } from "@/context/code";
 import { createCode } from "@/actions/code";
-import { ACCESS_TOKEN_KEY } from "@/constants";
+import { ACCESS_TOKEN_KEY, baseConfig } from "@/constants";
+import { FileSystemTree } from "@webcontainer/api"
+import axios from "axios";
 
 interface WorkspaceProps {
   codeId? : string;
+  initialTitle?: string;
   initialChat?: {
     message: string;
     type: 'PROMPT' | 'RESPONSE';
@@ -31,7 +34,7 @@ interface WorkspaceProps {
   }[];
 }
 
-export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, initialCodeFiles }) => {
+export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialTitle, initialChat, initialCodeFiles }) => {
   // initialChat = demoChats;
   // initialCodeFiles = demoCodeFiles;
 
@@ -42,7 +45,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
   if ((!initialChat || !initialCodeFiles) && !initialPrompt && !isAuthRoute) throw new Error('Prompt is required to generate code');
 
   const router = useRouter();
-  const { setResponse, setPrompt: setInitialPrompt } = useCode();
+  const { setResponse, setPrompt: setInitialPrompt, webContainer } = useCode();
 
   const [prompt, setPrompt] = useState<string>(initialPrompt || '');
   const [chat, setChat] = useState<{ message: string; type: 'PROMPT' | 'RESPONSE'; }[]>(initialChat || []);
@@ -50,7 +53,9 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
   const [selectedFile, setSelectedFile] = useState<string>('');
   const [generating, setGenerating] = useState<string>("");
   const [fileSystem, setFileSystem] = useState<FileSystemType>();
-  const [title, setTitle] = useState<string>("");
+  const [title, setTitle] = useState<string>(initialTitle || 'Untitled');
+  const [previewUrl, setPreviewUrl] = useState<string>("");
+  const [tabValue, setTabValue] = useState<'code' | 'preview'>('code');
   const chatRef = useRef<HTMLDivElement | null>(null);
 
   const updateFile = (file : File) => {
@@ -108,6 +113,43 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
     return files;
   }
 
+  const fileSystemTree = (fs: FileSystemType, tree: FileSystemTree = {}) => {
+    // Handle root directory specially
+    if (fs.path === '/') {
+      const rootTree = {} as FileSystemTree;
+      fs.children.forEach((child) => {
+        if (child.content) {
+          rootTree[child.name] = {
+            file: {
+              contents: child.content
+            }
+          };
+        } else {
+          rootTree[child.name] = {
+            directory: {} as FileSystemTree
+          };
+          child.children.forEach((grandChild) => fileSystemTree(grandChild, (rootTree[child.name] as { directory: FileSystemTree }).directory));
+        }
+      });
+      return rootTree;
+    }
+
+    // Handle non-root files and directories
+    if (fs.content) {
+      tree[fs.name] = {
+        file: {
+          contents: fs.content
+        }
+      };
+    } else {
+      tree[fs.name] = {
+        directory: {} as FileSystemTree
+      };
+      fs.children.forEach((child) => fileSystemTree(child, (tree[fs.name] as { directory: FileSystemTree }).directory));
+    }
+    return tree;
+  }
+
   const generate = async () => {
     if (!prompt) return;
     let url = `/api/generate?prompt=${prompt}`;
@@ -135,12 +177,10 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
       return [...prev, { message: prompt, type: 'PROMPT' }]
     });
     const eventSource = new EventSource(url);
-    console.log("eventSource", eventSource);
     setPrompt("");
     const toastId = toast.loading("Generating Steps...");
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log("data", data);
       if (data.title) setTitle(data.title);
       else if (data.name && data.path) {
         setGenerating(data.path);
@@ -189,13 +229,89 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
     `, 'file:///node_modules/@types/react/index.d.ts');
   };
 
+  const startDevServer = async () => {
+    if (!webContainer || !fileSystem) {
+      console.error("WebContainer or FileSystem not initialized");
+      return;
+    }
+    try {
+      const fsTree = {
+        ...fileSystemTree(fileSystem),
+        ...baseConfig
+      };
+      console.log("fsTree", fsTree);
+      await webContainer.fs.mkdir('my-mount-point');
+      await webContainer.mount(fsTree);
+      const packageJson = await webContainer.fs.readFile('package.json', 'utf-8').catch(() => null);
+      if (!packageJson) {
+        throw new Error("package.json not found");
+      }
+      console.log("Installing dependencies...");
+      await webContainer.spawn('cd', ['my-mount-point']);
+      const installDependencies = await webContainer.spawn('npm', ['install']);
+      installDependencies.output.pipeTo(new WritableStream({
+        write(chunk) {
+          console.log("npm install output:", chunk);
+        }
+      }));
+      const exitCode = await installDependencies.exit;
+      if (exitCode !== 0) {
+        throw new Error("Failed to install dependencies");
+      }
+      console.log("Dependencies installed successfully");
+      console.log("Starting development server...");
+      const startProcess = await webContainer.spawn('npm', ['run', 'dev']);
+      startProcess.output.pipeTo(new WritableStream({
+        write(chunk) {
+          console.log("Server output:", chunk);
+        }
+      }));
+      webContainer.on('server-ready', (port, url) => {
+        console.log("Server ready at:", url);
+        setPreviewUrl(url);
+      });
+    } catch (error: any) {
+      console.error("Error in startDevServer:", error);
+      toast?.error(error?.message || "Failed to start development server");
+    }
+  };
+
+  const download = async () => {
+    const toastId = toast.loading("Downloading code...");
+    try {
+      const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+      if (!token) throw new Error("Unauthorized");
+      const response = await axios.get(`/api/download/${codeId}`, {
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+        responseType: "blob",
+      });
+      const filename = `${title}.zip`;
+      const blob = new Blob([response.data], { type: "application/zip" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Code downloaded successfully", { id: toastId });
+    } catch (error) {
+      console.error("Error in download:", error);
+      const message = error instanceof Error ? error.message : "An Unexpected error occurred";
+      toast.error(message, { id: toastId });
+    }
+  };
+  
+
   useEffect(() => {
     if (prompt) generate();
   }, []);
 
   useEffect(() => {
     if (codeFiles) {
-      console.log("codeFiles", codeFiles);
       const fs: FileSystemType = {
         name: 'root',
         path: '/',
@@ -247,25 +363,29 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
     }
     let timeoutId : NodeJS.Timeout;
     if (chat.length == 2 && !initialCodeFiles && initialPrompt) {
-      timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(async () => {
         const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-        if (token && fileSystem) createCode(token, {
-          title,
-          files: fileSystemToCodeFiles(fileSystem),
-          response: chat[1].message
-        }, initialPrompt);
+        if (token && fileSystem) {
+          const { data, error } = await createCode(token, {
+            title,
+            files: fileSystemToCodeFiles(fileSystem),
+            response: chat[1].message
+          }, initialPrompt)
+          if (error || !data) {
+            toast.error('Failed to Save the Code');
+            return;
+          }
+          const { id } = data;
+          codeId = id;
+        };
       }, 2000);
     }
     return () => clearTimeout(timeoutId);
   }, [chat]);
 
   useEffect(() => {
-    console.log("fs", fileSystem);
-  }, [fileSystem]);
-
-  useEffect(() => {
-    console.log("selectedFile", selectedFile);
-  }, [selectedFile]);
+    if (tabValue === 'preview') startDevServer();
+  }, [tabValue]);
 
   return (
     <div className="w-[90vw] h-[80vh] flex items-center gap-3">
@@ -317,7 +437,8 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
         </div>
       </div>
       <Tabs
-        defaultValue="code"
+        value={tabValue}
+        onValueChange={(value) => setTabValue(value as 'code' | 'preview')}
         className="flex-grow h-full border-[1px] border-gray-700 rounded-xl flex flex-col"
       >
         <div className="w-full flex justify-between items-center p-4 border-[1px] border-gray-700 rounded-t-xl">
@@ -337,7 +458,11 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
               <span>Preview</span>
             </TabsTrigger>
           </TabsList>
-          <Button variant="ghost" className="bg-white text-black hover:bg-gray-200 rounded-lg flex items-center justify-center gap-2">
+          <Button
+            onClick={() => download()}
+            disabled={generating !== ""}
+            className="flex items-center justify-center gap-2"
+          >
             <Download/>
             <span>Download Code</span>
           </Button>
@@ -382,7 +507,20 @@ export const Workspace : React.FC<WorkspaceProps> = ({ codeId, initialChat, init
             </div>
           </div>
         </TabsContent>
+        <TabsContent
+          value="preview"
+          className="w-full flex flex-col items-start justify-start"
+        >
+          {/* <iframe
+            src={previewUrl}
+            className="w-lvh h-lvw fixed top-0 left-0"
+          /> */}
+        </TabsContent>
       </Tabs>
+      <iframe
+        src={previewUrl}
+        className="w-lvh h-lvw fixed top-0 left-0"
+      />
     </div>
   )
 }

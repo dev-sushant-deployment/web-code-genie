@@ -12,7 +12,7 @@ const WorkspacePage : React.FC<WorkspacePageProps> = async ({ params, searchPara
   const { data, error, status } = await getCode(token, id);
   if (error && status) throw new Error(error);
   if (!data) throw new Error('An unexpected error occurred');
-  const { id : codeId, chat, files } = data;
+  const { id : codeId, chat, files, title } = data;
   let uniqueChat : {
     message: string;
     type: 'PROMPT' | 'RESPONSE';
@@ -31,6 +31,7 @@ const WorkspacePage : React.FC<WorkspacePageProps> = async ({ params, searchPara
   return (
     <Workspace
       codeId={codeId}
+      initialTitle={title}
       initialChat={uniqueChat}
       initialCodeFiles={files}
     />
