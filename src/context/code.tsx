@@ -1,6 +1,5 @@
 "use client"
 
-import { baseConfig } from "@/constants";
 import { WebContainer } from "@webcontainer/api";
 import { createContext, useContext, useState, ReactNode, useEffect } from "react"
 

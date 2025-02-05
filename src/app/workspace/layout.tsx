@@ -1,3 +1,5 @@
+
+
 import { CodeProvider } from "@/context/code";
 
 export default function RootLayout({
@@ -5,7 +7,7 @@ export default function RootLayout({
   auth,
 }: Readonly<{
   children: React.ReactNode;
-  auth?: React.ReactNode;
+  auth: React.ReactNode;
 }>) {
   return (
     <CodeProvider>

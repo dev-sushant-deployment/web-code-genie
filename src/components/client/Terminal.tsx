@@ -58,7 +58,7 @@ export const TerminalComponent : React.FC<TerminalComponentProps> = ({ setWriteO
       term.dispose();
       setWriteOnTerminal(undefined);
     };
-  }, []);
+  }, [setWriteOnTerminal]);
 
   return <div ref={terminalRef} className="w-full h-40 absolute bottom-0" />;
 }

@@ -12,6 +12,7 @@ export const customError = (errorData : { message?: string, status: number }) =>
   return new NextResponse(`event: error\ndata: ${JSON.stringify(errorData)}\n\n`, { headers });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const writeResponse = (controller: ReadableStreamDefaultController<any>, data : any) => {
   controller.enqueue(`data: ${JSON.stringify(data)}\n\n`);
 }
@@ -28,6 +29,7 @@ export const formatOutput = (name: string, path: string, content: string) => {
   return { name, path, content };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const generateResponse = async (prompt : string, controller: ReadableStreamDefaultController<any>) => {
   const { GEMINI_CODE_GENERATION_API_KEY } = process.env;
   if (!GEMINI_CODE_GENERATION_API_KEY) {
