@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Input } from "../ui/input"
 import { Button } from "../ui/button";
-import { Code, Download, Laptop, Loader, MessageCircle, Save, Sparkles } from "lucide-react";
+import { Code, Download, Fullscreen, Laptop, Loader, MessageCircle, Save, Sparkles } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import type { File, FileSystem as FileSystemType } from '@/types/types';
 import { FileSystem } from "./FileSystem";
@@ -20,6 +20,10 @@ import { ACCESS_TOKEN_KEY, baseConfig } from "@/constants";
 import { FileSystemTree } from "@webcontainer/api"
 import axios from "axios";
 import { updateFiles } from "@/actions/file";
+import { TerminalComponent } from "./Terminal";
+import { Terminal } from "xterm";
+import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from "../ui/dialog";
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
 interface WorkspaceProps {
   initialCodeId? : string;
@@ -60,6 +64,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
   const [tabValue, setTabValue] = useState<'code' | 'preview'>('code');
   const [changedFiles, setChangedFiles] = useState<{ name: string, path: string, orgContent: string }[]>([]);
   const [saving, setSaving] = useState<boolean>(false);
+  const [writeOnTerminal, setWriteOnTerminal] = useState<Terminal>();
   const chatRef = useRef<HTMLDivElement | null>(null);
 
   const updateFile = (file : File) => {
@@ -234,8 +239,14 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
   };
 
   const startDevServer = async () => {
+    if (previewUrl) return;
     if (!webContainer || !fileSystem) {
       console.error("WebContainer or FileSystem not initialized");
+      return;
+    }
+    if (!writeOnTerminal) {
+      console.error("Terminal failed to initialize");
+      toast.error("Terminal failed to initialize");
       return;
     }
     try {
@@ -243,35 +254,31 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
         ...fileSystemTree(fileSystem),
         ...baseConfig
       };
-      console.log("fsTree", fsTree);
-      await webContainer.fs.mkdir('my-mount-point');
       await webContainer.mount(fsTree);
       const packageJson = await webContainer.fs.readFile('package.json', 'utf-8').catch(() => null);
       if (!packageJson) {
         throw new Error("package.json not found");
       }
-      console.log("Installing dependencies...");
       await webContainer.spawn('cd', ['my-mount-point']);
+      writeOnTerminal.write('> \x1b[33mnpm\x1b[0m \x1b[97minstall\x1b[0m\r\n');
       const installDependencies = await webContainer.spawn('npm', ['install']);
       installDependencies.output.pipeTo(new WritableStream({
         write(chunk) {
-          console.log("npm install output:", chunk);
+          writeOnTerminal.write('\r'+chunk);
         }
       }));
       const exitCode = await installDependencies.exit;
       if (exitCode !== 0) {
         throw new Error("Failed to install dependencies");
       }
-      console.log("Dependencies installed successfully");
-      console.log("Starting development server...");
+      writeOnTerminal.write('> \x1b[33mnpm\x1b[0m \x1b[97mrun dev\x1b[0m\r\n');
       const startProcess = await webContainer.spawn('npm', ['run', 'dev']);
       startProcess.output.pipeTo(new WritableStream({
         write(chunk) {
-          console.log("Server output:", chunk);
+          writeOnTerminal.write('\r\n'+chunk);
         }
       }));
-      webContainer.on('server-ready', (port, url) => {
-        console.log("Server ready at:", url);
+      webContainer.on('server-ready', (_port, url) => {
         setPreviewUrl(url);
       });
     } catch (error: any) {
@@ -309,7 +316,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
     }
   };
   
-  const handleEditorChange = (code: string) => {
+  const handleEditorChange = async (code: string) => {
     const changedFileIndex = changedFiles.findIndex((f) => f.path + '/' === selectedFile);
     if (changedFileIndex === -1) {
       const newChangedFile = codeFiles.find((f) => f.path + '/' === selectedFile);
@@ -346,6 +353,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
       path: selectedFile,
       content: code
     });
+    await webContainer?.fs.writeFile(selectedFile, code);
   }
 
   const saveChanges = async () => {
@@ -455,9 +463,13 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
     if (tabValue === 'preview') startDevServer();
   }, [tabValue]);
 
+  useEffect(() => {
+    if (generating != "") setTabValue('code');
+  }, [generating]);
+
   return (
     <div className="w-[90vw] h-[80vh] flex items-center gap-3">
-      <div className="w-[30%] h-full border-[1px] border-gray-700 rounded-xl flex flex-col items-center justify-center">
+      <div className="w-[30%] h-full border-[1px] border-gray-700 rounded-xl flex flex-col items-center justify-center pt-4">
         <div
           className="flex-grow rounded-t-xl w-full overflow-y-scroll p-4 flex flex-col gap-3"
           ref={chatRef}
@@ -489,7 +501,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
             </div>
           }
         </div>
-        <div className="h-12 mt-2 rounded-b-xl w-full flex items-center justify-center sticky bottom-0">
+        <div className="h-20 mt-2 rounded-b-xl w-full flex items-center justify-center sticky bottom-0">
           <Input
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -504,103 +516,133 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
           </Button>
         </div>
       </div>
-      <Tabs
-        value={tabValue}
-        onValueChange={(value) => setTabValue(value as 'code' | 'preview')}
-        className="flex-grow h-full border-[1px] border-gray-700 rounded-xl flex flex-col"
-      >
-        <div className="w-full flex justify-between items-center p-4 border-[1px] border-gray-700 rounded-t-xl">
-          <TabsList className="flex gap-3 p-4">
-            <TabsTrigger
-              value="code"
-              className="data-[state=active]:bg-black data-[state=active]:text-white rounded-lg flex justify-center items-center gap-2"
-            >
-              <Code size={16}/>
-              <span>Code</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="preview"
-              className="data-[state=active]:bg-black data-[state=active]:text-white rounded-lg flex justify-center items-center gap-2"
-            >
-              <Laptop size={16}/>
-              <span>Preview</span>
-            </TabsTrigger>
-          </TabsList>
-          <div className="flex justify-between gap-2 items-center">
-            {changedFiles.length > 0 && 
+      <div className="flex-grow h-full border-[1px] border-gray-700 rounded-t-xl flex flex-col items-start justify-start relative">
+        <Tabs
+          value={tabValue}
+          onValueChange={(value) => {
+            if (value === 'preview') {
+              if (!webContainer) {
+                toast.error("WebContainer not initialized");
+                return;
+              } else if (generating !== "") {
+                toast.info("Wait for code generation to complete", { closeButton : true });
+                return;
+              }
+            }
+            setTabValue(value as 'code' | 'preview')
+          }}
+          className="flex-grow w-full border-[1px] border-gray-700 rounded-t-xl flex flex-col"
+        >
+          <div className="w-full flex justify-between items-center p-4 border-[1px] border-gray-700 rounded-t-xl">
+            <TabsList className="flex gap-3 p-4">
+              <TabsTrigger
+                value="code"
+                className="data-[state=active]:bg-black data-[state=active]:text-white rounded-lg flex justify-center items-center gap-2"
+              >
+                <Code size={16}/>
+                <span>Code</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="preview"
+                className="data-[state=active]:bg-black data-[state=active]:text-white rounded-lg flex justify-center items-center gap-2"
+              >
+                <Laptop size={16}/>
+                <span>Preview</span>
+              </TabsTrigger>
+            </TabsList>
+            <div className="flex justify-between gap-2 items-center">
+              {changedFiles.length > 0 && 
+                <Button
+                  onClick={() => saveChanges()}
+                  disabled={changedFiles.length === 0}
+                  className="flex items-center justify-center gap-2"
+                >
+                  {saving ? <Loader className="animate-spin"/> : <Save/>}
+                  <span>Save Changes</span>
+                </Button>
+              }
               <Button
-                onClick={() => saveChanges()}
-                disabled={changedFiles.length === 0}
+                onClick={() => download()}
+                disabled={generating !== ""}
                 className="flex items-center justify-center gap-2"
               >
-                {saving ? <Loader className="animate-spin"/> : <Save/>}
-                <span>Save Changes</span>
+                <Download/>
+                <span>Download Code</span>
               </Button>
-            }
-            <Button
-              onClick={() => download()}
-              disabled={generating !== ""}
-              className="flex items-center justify-center gap-2"
-            >
-              <Download/>
-              <span>Download Code</span>
-            </Button>
-          </div>
-        </div>
-        <TabsContent
-          value="code"
-          className={`w-full flex flex-grow rounded-b-xl m-0 ${selectedFile ? 'overflow-y-scroll' : ''}`}
-        >
-          <div className="w-1/4 border-r-[1px] border-gray-700 overflow-y-scroll relative">
-            <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold sticky top-0 bg-black z-10">Files</p>
-            {fileSystem &&
-              <FileSystem
-                fileSystem={fileSystem}
-                selectedFile={selectedFile}
-                generating={generating}
-                setSelectedFile={setSelectedFile}
-              />}
-          </div>
-          <div className={`w-3/4 flex flex-col items-start justify-start relative ${selectedFile ? 'overflow-y-scroll' : ''}`}>
-            <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold sticky top-0">
-              {selectedFile.split('/').slice(-2)[0] || 'Code'}
-            </p>
-            <div className="w-full flex-grow overflow-y-scroll bg-gray-900 flex items-center justify-center">
-              {!selectedFile && <p className="text-white text-2xl font-semibold">Select a file to view code</p>}
-              {selectedFile && <Editor
-                beforeMount={handleEditorWillMount}
-                value={codeFiles?.find((file) => file.path + '/' === selectedFile)?.content}
-                onChange={(code) => code && handleEditorChange(code)}
-                loading={<Loader size={24} className="animate-spin" color="white"/>}
-                language={getFileLanguage(selectedFile)}
-                theme="vs-dark"
-                options={{
-                  wordWrap: "on",
-                  formatOnType: true,
-                  formatOnPaste: true,
-                  minimap: { enabled: true },
-                  automaticLayout: true,
-                  scrollBeyondLastLine: false
-                }}
-                className="text-white w-[650px] whitespace-pre-wrap focus:outline-none focus:border-none"
-              />}
             </div>
           </div>
-        </TabsContent>
-        <TabsContent
-          value="preview"
-          className="w-full flex flex-col items-start justify-start"
-        >
-          {/* <iframe
-            src={previewUrl}
-            className="w-lvh h-lvw fixed top-0 left-0"
-          /> */}
-        </TabsContent>
-      </Tabs>
-      <iframe
-        src={previewUrl}
-        className="w-lvh h-lvw fixed top-0 left-0"
-      />
+          <TabsContent
+            value="code"
+            className={`w-full flex flex-grow rounded-b-xl m-0 ${selectedFile ? 'overflow-y-scroll' : ''}`}
+          >
+            <div className="w-1/4 border-r-[1px] border-gray-700 overflow-y-scroll relative">
+              <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold sticky top-0 bg-black z-10">Files</p>
+              {fileSystem &&
+              <div className="w-full flex-grow h-[calc(100%-12rem)] overflow-y-scroll">
+                <FileSystem
+                  fileSystem={fileSystem}
+                  selectedFile={selectedFile}
+                  generating={generating}
+                  setSelectedFile={setSelectedFile}
+                />
+              </div>}
+            </div>
+            <div className={`w-3/4 flex flex-col items-start justify-start relative ${selectedFile ? 'overflow-y-scroll' : ''}`}>
+              <p className="text-white w-full border-b-[1px] border-gray-700 p-2 text-lg font-semibold sticky top-0">
+                {selectedFile.split('/').slice(-2)[0] || 'Code'}
+              </p>
+              <div className="w-full h-[calc(100%-12rem)] overflow-y-scroll bg-gray-900 flex items-center justify-center">
+                {!selectedFile && <p className="text-white text-2xl font-semibold">Select a file to view code</p>}
+                {selectedFile && <Editor
+                  beforeMount={handleEditorWillMount}
+                  value={codeFiles?.find((file) => file.path + '/' === selectedFile)?.content}
+                  onChange={(code) => code && handleEditorChange(code)}
+                  loading={<Loader size={24} className="animate-spin" color="white"/>}
+                  language={getFileLanguage(selectedFile)}
+                  theme="vs-dark"
+                  options={{
+                    wordWrap: "on",
+                    formatOnType: true,
+                    formatOnPaste: true,
+                    minimap: { enabled: true },
+                    automaticLayout: true,
+                    scrollBeyondLastLine: false
+                  }}
+                  className="text-white w-[650px] whitespace-pre-wrap focus:outline-none focus:border-none"
+                />}
+              </div>
+            </div>
+          </TabsContent>
+          <TabsContent
+            value="preview"
+            className={`w-full ${tabValue === 'preview' ? 'h-full relative' : ''}`}
+          >
+            <iframe
+              src={previewUrl}
+              className="w-full h-[calc(100%-12rem)] bg-white"
+            />
+            <Dialog>
+              <DialogTrigger>
+                <Fullscreen
+                  size={24}
+                  className="absolute top-2 right-2 cursor-pointer p-1 rounded backdrop-blur-md bg-gray-900"
+                />
+              </DialogTrigger>
+              <DialogContent className="w-screen h-screen p-0">
+                <VisuallyHidden>
+                  <DialogTitle>Preview</DialogTitle>
+                </VisuallyHidden>
+                <DialogClose className="fixed top-[14px] right-[14px] p-1 bg-gray-900 backdrop-blur-md h-5 w-5 rounded-full"/>
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-full bg-white"
+                />
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+        </Tabs>
+        <TerminalComponent setWriteOnTerminal={setWriteOnTerminal}/>
+      </div>
     </div>
   )
 }

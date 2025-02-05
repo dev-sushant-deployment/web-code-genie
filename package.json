@@ -19,6 +19,7 @@
     "@radix-ui/react-scroll-area": "^1.2.2",
     "@radix-ui/react-slot": "^1.1.1",
     "@radix-ui/react-tabs": "^1.1.2",
+    "@radix-ui/react-visually-hidden": "^1.1.1",
     "@types/webpack": "^5.28.5",
     "@webcontainer/api": "^1.5.1-internal.8",
     "archiver": "^7.0.1",
@@ -39,7 +40,9 @@
     "sonner": "^1.7.2",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "webpack": "^5.97.1"
+    "webpack": "^5.97.1",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
