@@ -1,13 +1,13 @@
 const GENERAL_PROMPT = `
 Below is the description of a website that I want to build.
 
-- The website should be a **full-stack Next.js 14 project** using the App Router and JavaScript.
+- The website should be a **full-stack Next.js 15.1.6 project** using the App Router and JavaScript.
 - UI/UX should be **modern, elegant, and responsive** across all devices.
 - Use **Tailwind CSS** for styling.
 - Include **Dark Mode Support** using Tailwind's dark mode feature.
 - Avoid unnecessary animations but ensure a smooth, polished UI.
 - Implement authentication if applicable (e.g., NextAuth.js).
-- Follow the **best practices of Next.js 14 App Router**.
+- Follow the **best practices of Next.js 15.1.6 App Router**.
 - The project should be structured properly, with separate concerns for **components, API routes, and utilities**.
 
 The website should have **as many relevant features as possible** to make it a complete, functional project.
@@ -56,6 +56,8 @@ Now, to build the website described below:
 🔹 Break down the steps into clear, **actionable tasks** (Frontend, Backend, Database, etc.).
 🔹 Mention key **libraries/tools** needed (e.g., Tailwind, NextAuth, Prisma, WebSockets).
 🔹 Keep explanations concise but precise.
+🔹 Your Respons first line should include the **title** for this website.
+    Example: "Title: Build a Social Media Platform"
 
 Your response should be in **clear numbered steps**.
 `;

@@ -19,17 +19,17 @@ export default function RootLayout({
   children: React.ReactNode;
   auth?: React.ReactNode;
 }>) {
-  return (<Suspense fallback={<div>Loading...</div>}>
-      <html lang="en" className="scroll-smooth dark">
-        <body>
-          <Toaster />
-          <div className="min-h-lvh flex flex-col items-center justify-between">
-            <Navbar />
-            {children}
-            <Footer/>
-          </div>
-          {auth}
-        </body>
-      </html>
-    </Suspense>)
+  return (
+    <html lang="en" className="scroll-smooth dark">
+      <body>
+        <Toaster />
+        <div className="min-h-lvh flex flex-col items-center justify-between">
+          <Navbar />
+          {children}
+          <Footer/>
+        </div>
+        {auth}
+      </body>
+    </html>
+    )
 }

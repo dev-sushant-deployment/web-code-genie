@@ -61,10 +61,12 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
   const [fileSystem, setFileSystem] = useState<FileSystemType>();
   const [title, setTitle] = useState<string>(initialTitle || 'Untitled');
   const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [tabValue, setTabValue] = useState<'code' | 'preview'>('code');
+  const [tabValue, setTabValue] = useState<'code' | 'preview'>('preview');
   const [changedFiles, setChangedFiles] = useState<{ name: string, path: string, orgContent: string }[]>([]);
   const [saving, setSaving] = useState<boolean>(false);
   const [writeOnTerminal, setWriteOnTerminal] = useState<Terminal>();
+  const [startingDevServer, setStartingDevServer] = useState<boolean>(false);
+  const [generatingCode, setGeneratingCode] = useState<boolean>(false);
   const chatRef = useRef<HTMLDivElement | null>(null);
 
   const updateFile = (file : File) => {
@@ -185,11 +187,30 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
       if (prev.slice(-1)[0]?.type === 'PROMPT') return prev;
       return [...prev, { message: prompt, type: 'PROMPT' }]
     });
+    setGeneratingCode(true);
+    const toastId = toast.loading("Generating Steps...");
+    if (url.includes('generate')) {
+      const { data } = await axios.get(`/api/step?prompt=${prompt}`);
+      if (!data) {
+        toast.error("Failed to generate steps");
+        return;
+      }
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+      if (!data.id) {
+        toast.error("Failed to generate steps");
+        return;
+      }
+      const { id } = data;
+      url = `/api/generate?prompt=${prompt}&steps=${id}`;
+    }
     const eventSource = new EventSource(url);
     setPrompt("");
-    const toastId = toast.loading("Generating Steps...");
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      console.log("data", data);
       if (data.title) setTitle(data.title);
       else if (data.name && data.path) {
         setGenerating(data.path);
@@ -212,12 +233,16 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
         eventSource.close();
         toast.success("Code generated successfully", { id: toastId});
         setGenerating("");
+        setGeneratingCode(false);
+        setTabValue('preview');
       }
     }
     eventSource.onerror = (error) => {
       console.log(error);
       eventSource.close();
       toast.error("An error occurred while generating code", { id: toastId });
+      setGenerating("");
+      setGeneratingCode(false);
     }
   }
 
@@ -239,6 +264,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
   };
 
   const startDevServer = async () => {
+    if (startingDevServer) return;
     if (previewUrl) return;
     if (!webContainer || !fileSystem) {
       console.error("WebContainer or FileSystem not initialized");
@@ -249,6 +275,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
       toast.error("Terminal failed to initialize");
       return;
     }
+    setStartingDevServer(true);
     try {
       const fsTree = {
         ...fileSystemTree(fileSystem),
@@ -286,6 +313,7 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
       console.error("Error in startDevServer:", error);
       toast?.error(error?.message || "Failed to start development server");
     }
+    setStartingDevServer(false);
   };
 
   const download = async () => {
@@ -461,12 +489,12 @@ export const Workspace : React.FC<WorkspaceProps> = ({ initialCodeId, initialTit
   }, [chat]);
 
   useEffect(() => {
-    if (tabValue === 'preview') startDevServer();
-  }, [tabValue]);
+    if (tabValue === 'preview' && webContainer && fileSystem && !previewUrl) startDevServer();
+  }, [tabValue, webContainer, fileSystem, previewUrl]);
 
   useEffect(() => {
-    if (generating != "") setTabValue('code');
-  }, [generating]);
+    if (generatingCode) setTabValue('code');
+  }, [generatingCode]);
 
   return (
     <div className="w-[90vw] h-[80vh] flex items-center gap-3">
