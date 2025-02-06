@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { Navbar } from "@/components/general/Navbar";
 import { Footer } from "@/components/general/Footer";
 import { Toaster } from "@/components/client/Toaster";
+import { Loader } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Web Code Genie",
@@ -20,16 +21,18 @@ export default function RootLayout({
   auth?: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="scroll-smooth dark">
-      <body>
-        <Toaster />
-        <div className="min-h-lvh flex flex-col items-center justify-between">
-          <Navbar />
-          {children}
-          <Footer/>
-        </div>
-        {auth}
-      </body>
-    </html>
+    <Suspense fallback={<Loader className="h-12 w-12 text-primary animate-spin" />}>
+      <html lang="en" className="scroll-smooth dark">
+        <body>
+          <Toaster />
+          <div className="min-h-lvh flex flex-col items-center justify-between">
+            <Navbar />
+            {children}
+            <Footer/>
+          </div>
+          {auth}
+        </body>
+      </html>
+    </Suspense>
     )
 }
